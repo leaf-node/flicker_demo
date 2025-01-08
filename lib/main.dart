@@ -7,48 +7,68 @@ void main() {
   runApp(const MyApp());
 }
 
-class AppCubit extends Cubit<ThemeMode> {
-  AppCubit() : super(ThemeMode.light) {
+class AppCubit extends Cubit<Pages> {
+  AppCubit() : super(Pages.root) {
     Timer.periodic(Duration(milliseconds: 500), (_) {
-      if (state == ThemeMode.light) {
-        emit(ThemeMode.dark);
+      if (state == Pages.root) {
+        emit(Pages.second);
       } else {
-        emit(ThemeMode.light);
+        emit(Pages.root);
       }
     });
   }
 }
 
-class MyApp extends StatelessWidget {
+enum Pages { root, second }
+
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  NavigatorState? get _navigator => _navigatorKey.currentState;
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
         create: (context) => AppCubit(),
-        child: BlocBuilder<AppCubit, ThemeMode>(
-            builder: (context, state) => MaterialApp(
-                  title: 'Flutter Demo',
-                  theme: ThemeData(
-                    colorScheme:
-                        ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-                    useMaterial3: true,
-                  ),
-                  darkTheme: ThemeData(
-                      colorScheme: const ColorScheme.dark(
-                          primary: Color(0xFF224488),
-                          onSurface: Color(0xFFBBBBBB))),
-                  themeMode: state,
-                  home: const MyHomePage(
-                      title: 'Flutter flicker demo (for Android)'),
-                )));
+        child: BlocListener<AppCubit, Pages>(listener: (context, state) {
+          switch (state) {
+            case Pages.root:
+              _navigator?.pushAndRemoveUntil(MyHomePage.route(), (_) => false);
+            case Pages.second:
+              _navigator?.push(SecondPage.route());
+          }
+        }, child: BlocBuilder<AppCubit, Pages>(builder: (context, state) {
+          return MaterialApp(
+            title: 'Flutter Demo',
+            navigatorKey: _navigatorKey,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+              useMaterial3: true,
+            ),
+            home: const MyHomePage(),
+          );
+        })));
   }
 }
 
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key, required this.title});
+final String helpText = 'This screen will switch between two\n'
+    'screens with different colors every\n'
+    '500 ms. Keep an eye out for any major\n'
+    'flickering during a transition on Android.';
 
-  final String title;
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key});
+
+  final String title = 'Flutter flicker demo (first page)';
+
+  static Route<void> route() {
+    return MaterialPageRoute<void>(builder: (_) => MyHomePage());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,12 +81,38 @@ class MyHomePage extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'This screen will switch between light\n'
-              'mode and dark mode every 500 ms. Keep\n'
-              'an eye out for any major flickering\n'
-              'during a transition on Android.',
-            ),
+            Text(helpText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SecondPage extends StatelessWidget {
+  const SecondPage({super.key});
+
+  final String title = 'Flutter flicker demo (second page)';
+
+  static Route<void> route() {
+    return MaterialPageRoute<void>(builder: (_) => SecondPage());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Color.fromARGB(255, 0, 128, 128),
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Text(title),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+                style: TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
+                helpText),
           ],
         ),
       ),
