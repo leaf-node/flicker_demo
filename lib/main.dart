@@ -1,4 +1,6 @@
-import 'dart:async';
+// Copyright Andrew Engelbrecht 2025. License: MIT
+
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,19 +9,60 @@ void main() {
   runApp(const MyApp());
 }
 
-class AppCubit extends Cubit<Pages> {
-  AppCubit() : super(Pages.root) {
-    Timer.periodic(Duration(milliseconds: 500), (_) {
-      if (state == Pages.root) {
-        emit(Pages.second);
-      } else {
-        emit(Pages.root);
-      }
-    });
-  }
+final initColor = PageColors.red;
+
+enum PageColors {
+  red("Red", Color.fromARGB(255, 255, 128, 128)),
+  green("Green", Color.fromARGB(255, 128, 255, 128)),
+  blue("Blue", Color.fromARGB(255, 128, 128, 255));
+
+  const PageColors(this.title, this.color);
+
+  final String title;
+  final Color color;
 }
 
-enum Pages { root, second }
+class NavState {
+  NavState(this.color, this.timestamp);
+
+  final PageColors color;
+  final int timestamp; // to bypass equality matching
+}
+
+class AppCubit extends Cubit<NavState> {
+  AppCubit() : super(NavState(initColor, 0));
+
+  final List<PageColors> _history = [initColor];
+
+  void open(PageColors pageColor) {
+    if (pageColor != _history.last) {
+      _history.add(pageColor);
+      emit(NavState(pageColor, _genTimestamp()));
+    }
+  }
+
+  void pop(BuildContext context) {
+    if (_history.length > 1) {
+      _history.removeLast();
+      Navigator.pop(context);
+    }
+  }
+
+  void openRandom(PageColors pageColor) {
+    switch (pageColor) {
+      case PageColors.red:
+        open(Random().nextBool() ? PageColors.green : PageColors.blue);
+      case PageColors.green:
+        open(Random().nextBool() ? PageColors.red : PageColors.blue);
+      case PageColors.blue:
+        open(Random().nextBool() ? PageColors.red : PageColors.green);
+    }
+  }
+
+  int _genTimestamp() {
+    return DateTime.now().millisecondsSinceEpoch;
+  }
+}
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -35,87 +78,72 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return BlocProvider(
         create: (context) => AppCubit(),
-        child: BlocListener<AppCubit, Pages>(listener: (context, state) {
-          switch (state) {
-            case Pages.root:
-              _navigator?.pushAndRemoveUntil(MyHomePage.route(), (_) => false);
-            case Pages.second:
-              _navigator?.push(SecondPage.route());
+        child: BlocListener<AppCubit, NavState>(
+            listener: (context, state) {
+              _navigator?.push(PageWithButton.route(pageColor: state.color));
+            },
+            child: MaterialApp(
+                title: 'Flicker Demo',
+                navigatorKey: _navigatorKey,
+                home: PageWithButton(pageColor: initColor))));
+  }
+}
+
+class PageWithButton extends StatelessWidget {
+  const PageWithButton({super.key, required this.pageColor});
+
+  final PageColors pageColor;
+
+  final String helpText = 'This app has buttons to open pages\n'
+      'with different colors. Keep an eye out\n'
+      'for any major flickering during a\n'
+      'transition on Android.';
+
+  static Route<void> route({required PageColors pageColor}) {
+    return MaterialPageRoute<void>(
+        builder: (_) => PageWithButton(pageColor: pageColor));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, dynamic result) {
+          if (!didPop) {
+            context.read<AppCubit>().pop(context);
           }
-        }, child: BlocBuilder<AppCubit, Pages>(builder: (context, state) {
-          return MaterialApp(
-            title: 'Flutter Demo',
-            navigatorKey: _navigatorKey,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-              useMaterial3: true,
+        },
+        child: Scaffold(
+            backgroundColor: pageColor.color,
+            appBar: AppBar(
+              backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+              title: Text("${pageColor.title} Page"),
             ),
-            home: const MyHomePage(),
-          );
-        })));
-  }
-}
-
-final String helpText = 'This screen will switch between two\n'
-    'screens with different colors every\n'
-    '500 ms. Keep an eye out for any major\n'
-    'flickering during a transition on Android.';
-
-class MyHomePage extends StatelessWidget {
-  const MyHomePage({super.key});
-
-  final String title = 'Flutter flicker demo (first page)';
-
-  static Route<void> route() {
-    return MaterialPageRoute<void>(builder: (_) => MyHomePage());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(helpText),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SecondPage extends StatelessWidget {
-  const SecondPage({super.key});
-
-  final String title = 'Flutter flicker demo (second page)';
-
-  static Route<void> route() {
-    return MaterialPageRoute<void>(builder: (_) => SecondPage());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color.fromARGB(255, 0, 128, 128),
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-                style: TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
-                helpText),
-          ],
-        ),
-      ),
-    );
+            body: Center(
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                  Padding(padding: EdgeInsets.all(8), child: Text(helpText)),
+                  Padding(
+                      padding: EdgeInsets.all(8),
+                      child: ElevatedButton(
+                          onPressed: () =>
+                              context.read<AppCubit>().pop(context),
+                          child: Text("Close page"))),
+                  Padding(
+                      padding: EdgeInsets.all(8),
+                      child: ElevatedButton(
+                          onPressed: () =>
+                              context.read<AppCubit>().openRandom(pageColor),
+                          child: Text("Random page"))),
+                  for (PageColors pcValue in PageColors.values)
+                    Padding(
+                        padding: EdgeInsets.all(8),
+                        child: ElevatedButton(
+                            onPressed: pcValue == pageColor
+                                ? null
+                                : () => context.read<AppCubit>().open(pcValue),
+                            child: Text("${pcValue.title} page")))
+                ]))));
   }
 }
