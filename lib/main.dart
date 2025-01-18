@@ -3,6 +3,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 void main() {
@@ -45,6 +46,8 @@ class AppCubit extends Cubit<NavState> {
     if (_history.length > 1) {
       _history.removeLast();
       Navigator.pop(context);
+    } else {
+      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     }
   }
 
